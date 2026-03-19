@@ -9,6 +9,7 @@ options {
 environment {
     JFROG_URL = "http://192.168.56.1:8082/artifactory/ecommerce-frontend"
     DEPLOY_PATH = "C:\\inetpub\\ecommerce-ui"
+    TEMP_PATH = "C:\\temp\\frontend-deploy"
 }
 
 stages {
@@ -20,6 +21,11 @@ stages {
                 rmdir /s /q %DEPLOY_PATH%
             )
             mkdir %DEPLOY_PATH%
+
+            if exist %TEMP_PATH% (
+                rmdir /s /q %TEMP_PATH%
+            )
+            mkdir %TEMP_PATH%
             '''
         }
     }
@@ -27,9 +33,8 @@ stages {
     stage('Download Artifact from JFrog') {
         steps {
             withCredentials([usernamePassword(credentialsId: 'artifactory-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-
                 bat '''
-                curl.exe -u %USER%:%PASS% -O %JFROG_URL%/latest.zip
+                curl.exe -u %USER%:%PASS% -o %TEMP_PATH%\\frontend.zip %JFROG_URL%/latest.zip
                 '''
             }
         }
@@ -38,7 +43,28 @@ stages {
     stage('Extract Artifact') {
         steps {
             bat '''
-            powershell Expand-Archive -Path latest.zip -DestinationPath %DEPLOY_PATH%
+            powershell Expand-Archive -Path %TEMP_PATH%\\frontend.zip -DestinationPath %TEMP_PATH%
+            '''
+        }
+    }
+
+    stage('Move Build Files to IIS Root') {
+        steps {
+            bat '''
+            REM 🔥 Move ONLY browser files to IIS root (fix nested issue)
+            for /d %%i in (%TEMP_PATH%\\*) do (
+                if exist "%%i\\browser" (
+                    xcopy "%%i\\browser\\*" "%DEPLOY_PATH%\\" /E /I /Y
+                )
+            )
+            '''
+        }
+    }
+
+    stage('Cleanup Temp') {
+        steps {
+            bat '''
+            rmdir /s /q %TEMP_PATH%
             '''
         }
     }
@@ -48,12 +74,11 @@ stages {
             powershell 'Restart-WebAppPool -Name "ecommerce-ui"'
         }
     }
-
 }
 
 post {
     success {
-        echo "✅ Frontend Deployment SUCCESS"
+        echo "✅ Frontend Deployment SUCCESS (Clean Structure)"
     }
     failure {
         echo "❌ Frontend Deployment FAILED"
