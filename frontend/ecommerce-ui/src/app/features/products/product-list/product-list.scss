@@ -1,0 +1,28 @@
+.container {
+  padding: 20px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.card {
+  transition: 0.3s;
+  border-radius: 12px;
+
+  &:hover {
+    transform: scale(1.05);
+  }
+
+  img {
+    height: 200px;
+    object-fit: cover;
+  }
+}
+
+.price {
+  font-weight: bold;
+  color: green;
+}
