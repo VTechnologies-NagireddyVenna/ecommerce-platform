@@ -12,7 +12,7 @@ stages {
 
     stage('Restore') {
         steps {
-            bat 'dotnet restore'
+            bat 'dotnet restore Ecommerce.sln'
         }
     }
 
