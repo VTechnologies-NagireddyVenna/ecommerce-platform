@@ -1,0 +1,117 @@
+pipeline {
+
+agent { label 'deploy-agent-build' }
+
+environment {
+    ARTIFACTORY_URL = "http://192.168.56.1:8082/artifactory/ecommerce-frontend"
+    SONAR_HOST_URL = "http://192.168.56.1:9000"
+    SONAR_PROJECT_KEY = "ecommerce-frontend"
+}
+
+stages {
+
+    stage('Debug Paths') {
+        steps {
+            bat 'dir frontend\\ecommerce-ui'
+        }
+    }
+
+    stage('Install Dependencies') {
+        steps {
+            dir('frontend\\ecommerce-ui') {
+                bat 'npm install'
+            }
+        }
+    }
+
+    stage('Security Scan - Trivy') {
+        steps {
+            bat '''
+            trivy fs --scanners vuln --timeout 10m --skip-dirs frontend/ecommerce-ui/node_modules --severity HIGH,CRITICAL --format table --output trivy-report.txt .
+            '''
+        }
+    }
+
+    stage('SonarQube Analysis') {
+        steps {
+            dir('frontend\\ecommerce-ui') {
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+
+                        bat """
+                        sonar-scanner ^
+                        -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
+                        -Dsonar.sources=. ^
+                        -Dsonar.host.url=%SONAR_HOST_URL% ^
+                        -Dsonar.login=%SONAR_TOKEN%
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    stage('Unit Testing') {
+        steps {
+            dir('frontend\\ecommerce-ui') {
+                bat 'npm run test'
+            }
+        }
+    }
+
+    stage('Quality Gate') {
+        steps {
+            timeout(time: 30, unit: 'MINUTES') {
+                waitForQualityGate abortPipeline: true
+            }
+        }
+    }
+
+    stage('Build') {
+        steps {
+            dir('frontend\\ecommerce-ui') {
+                bat 'npm run build -- --configuration production'
+            }
+        }
+    }
+
+    stage('Create Artifact') {
+        steps {
+            script {
+                def timestamp = new Date().format("yyyyMMdd-HHmm")
+                env.ZIP_NAME = "ecommerce-frontend-${timestamp}.zip"
+            }
+
+            bat '''
+            powershell Compress-Archive -Path frontend\\ecommerce-ui\\dist\\* -DestinationPath %ZIP_NAME%
+            '''
+        }
+    }
+
+    stage('Upload to JFrog') {
+        steps {
+            withCredentials([usernamePassword(credentialsId: 'artifactory-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+
+                bat '''
+                curl.exe -u %USER%:%PASS% -T %ZIP_NAME% %ARTIFACTORY_URL%/%ZIP_NAME%
+                curl.exe -u %USER%:%PASS% -T %ZIP_NAME% %ARTIFACTORY_URL%/latest.zip
+                '''
+            }
+        }
+    }
+}
+
+post {
+    always {
+        archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true
+    }
+    success {
+        echo "✅ Frontend CI Pipeline SUCCESS"
+    }
+    failure {
+        echo "❌ Frontend CI Pipeline FAILED"
+    }
+}
+
+
+}
