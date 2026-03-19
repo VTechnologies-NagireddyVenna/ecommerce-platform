@@ -1,9 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { Navbar } from './navbar';
+import { NavbarComponent } from './navbar.component';
 
 describe('Navbar', () => {
-  let component: Navbar;
+  let component: NavbarComponent;
   let fixture: ComponentFixture<Navbar>;
 
   beforeEach(async () => {
