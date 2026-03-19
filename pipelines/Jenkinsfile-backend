@@ -10,9 +10,19 @@ environment {
 
 stages {
 
+    stage('Debug Paths') {
+        steps {
+            bat 'echo Current Directory:'
+            bat 'cd'
+            bat 'dir'
+            bat 'dir backend'
+            bat 'dir backend\\*.sln'
+        }
+    }
+
     stage('Restore') {
         steps {
-            bat 'dotnet restore Ecommerce.sln'
+            bat 'dotnet restore backend\\Ecommerce.sln'
         }
     }
 
@@ -20,7 +30,7 @@ stages {
         steps {
             bat '''
             echo Running Trivy Security Scan...
-            trivy fs --scanners vuln --timeout 10m --skip-dirs bin,obj --severity HIGH,CRITICAL --format table --output trivy-report.txt .
+            trivy fs --scanners vuln --timeout 10m --skip-dirs backend/bin,backend/obj --severity HIGH,CRITICAL --format table --output trivy-report.txt .
             '''
         }
     }
@@ -37,7 +47,7 @@ stages {
                     /d:sonar.login="%SONAR_TOKEN%"
                     """
 
-                    bat 'dotnet build -c Release --no-restore'
+                    bat 'dotnet build backend\\Ecommerce.sln -c Release --no-restore'
 
                     bat """
                     dotnet sonarscanner end ^
@@ -50,7 +60,7 @@ stages {
 
     stage('Unit Testing') {
         steps {
-            bat 'dotnet test -c Release --no-build'
+            bat 'dotnet test backend\\Ecommerce.sln -c Release --no-build'
         }
     }
 
@@ -64,15 +74,15 @@ stages {
 
     stage('Publish') {
         steps {
-            bat 'dotnet publish -c Release -o publish --no-build'
+            bat 'dotnet publish backend\\src\\Web\\Web.csproj -c Release -o backend\\publish --no-build'
         }
     }
 
     stage('Clean Config Files') {
         steps {
             bat '''
-            powershell Remove-Item publish\\appsettings*.json -ErrorAction SilentlyContinue
-            powershell Remove-Item publish\\web.config -ErrorAction SilentlyContinue
+            powershell Remove-Item backend\\publish\\appsettings*.json -ErrorAction SilentlyContinue
+            powershell Remove-Item backend\\publish\\web.config -ErrorAction SilentlyContinue
             '''
         }
     }
@@ -85,7 +95,7 @@ stages {
             }
 
             bat '''
-            powershell Compress-Archive -Path publish\\* -DestinationPath %ZIP_NAME%
+            powershell Compress-Archive -Path backend\\publish\\* -DestinationPath %ZIP_NAME%
             '''
         }
     }
@@ -106,6 +116,12 @@ stages {
 post {
     always {
         archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true
+    }
+    success {
+        echo "✅ Backend CI Pipeline SUCCESS"
+    }
+    failure {
+        echo "❌ Backend CI Pipeline FAILED"
     }
 }
 
