@@ -2,6 +2,10 @@ pipeline {
 
 agent { label 'deploy-agent-build' }
 
+tools {
+    sonarScanner 'sonar-scanner'
+}
+
 environment {
     ARTIFACTORY_URL = "http://192.168.56.1:8082/artifactory/ecommerce-frontend"
     SONAR_HOST_URL = "http://192.168.56.1:9000"
@@ -12,9 +16,6 @@ stages {
 
     stage('Debug Paths') {
         steps {
-            bat 'echo Checking frontend structure...'
-            bat 'dir'
-            bat 'dir frontend'
             bat 'dir frontend\\ecommerce-ui'
         }
     }
@@ -30,7 +31,6 @@ stages {
     stage('Security Scan - Trivy') {
         steps {
             bat '''
-            echo Running Trivy Security Scan...
             trivy fs --scanners vuln --timeout 10m --skip-dirs frontend/ecommerce-ui/node_modules --severity HIGH,CRITICAL --format table --output trivy-report.txt .
             '''
         }
@@ -58,7 +58,8 @@ stages {
     stage('Unit Testing') {
         steps {
             dir('frontend\\ecommerce-ui') {
-                bat 'npm run test -- --watch=false --browsers=ChromeHeadless'
+                // 🔥 FIX: Use Vitest command (no browser dependency issue)
+                bat 'npm run test'
             }
         }
     }
@@ -116,5 +117,6 @@ post {
         echo "❌ Frontend CI Pipeline FAILED"
     }
 }
+
 
 }
