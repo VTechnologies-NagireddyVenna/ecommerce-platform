@@ -1,0 +1,59 @@
+pipeline {
+
+agent { label 'deploy-agent-deploy' }
+
+environment {
+    JFROG_URL = "http://192.168.56.1:8082/artifactory/ecommerce-backend"
+    DEPLOY_PATH = "C:\\inetpub\\ecommerce-api"
+}
+
+stages {
+
+    stage('Clean Old Deployment') {
+        steps {
+            bat '''
+            if exist %DEPLOY_PATH% (
+                rmdir /s /q %DEPLOY_PATH%
+            )
+            mkdir %DEPLOY_PATH%
+            '''
+        }
+    }
+
+    stage('Download Artifact from JFrog') {
+        steps {
+            withCredentials([usernamePassword(credentialsId: 'artifactory-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+
+                bat '''
+                curl.exe -u %USER%:%PASS% -O %JFROG_URL%/latest.zip
+                '''
+            }
+        }
+    }
+
+    stage('Extract Artifact') {
+        steps {
+            bat '''
+            powershell Expand-Archive -Path latest.zip -DestinationPath %DEPLOY_PATH%
+            '''
+        }
+    }
+
+    stage('Restart IIS') {
+        steps {
+            bat 'iisreset'
+        }
+    }
+
+}
+
+post {
+    success {
+        echo "✅ Backend Deployment SUCCESS"
+    }
+    failure {
+        echo "❌ Backend Deployment FAILED"
+    }
+}
+
+}
