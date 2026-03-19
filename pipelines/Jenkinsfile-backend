@@ -12,11 +12,7 @@ stages {
 
     stage('Debug Paths') {
         steps {
-            bat 'echo Current Directory:'
-            bat 'cd'
-            bat 'dir'
-            bat 'dir backend'
-            bat 'dir backend\\*.sln'
+            bat 'dir backend\\src /s'
         }
     }
 
@@ -74,7 +70,8 @@ stages {
 
     stage('Publish') {
         steps {
-            bat 'dotnet publish backend\\src\\Web\\Web.csproj -c Release -o backend\\publish --no-build'
+            // 🔥 UPDATE THIS PATH BASED ON YOUR ACTUAL PROJECT
+            bat 'dotnet publish backend\\src\\Ecommerce.API\\Ecommerce.API.csproj -c Release -o backend\\publish --no-build'
         }
     }
 
@@ -124,6 +121,5 @@ post {
         echo "❌ Backend CI Pipeline FAILED"
     }
 }
-
 
 }
