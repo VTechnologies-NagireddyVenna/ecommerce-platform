@@ -9,17 +9,21 @@ environment {
 }
 
 stages {
-    stage('Check Node') {
-    steps {
-        bat 'where node'
-        bat 'where npm'
-        bat 'node -v'
-        bat 'npm -v'
-     }
-   }
+
+    stage('Debug Paths') {
+        steps {
+            bat 'echo Checking frontend structure...'
+            bat 'dir'
+            bat 'dir frontend'
+            bat 'dir frontend\\ecommerce-ui'
+        }
+    }
+
     stage('Install Dependencies') {
         steps {
-            bat 'npm install'
+            dir('frontend\\ecommerce-ui') {
+                bat 'npm install'
+            }
         }
     }
 
@@ -27,23 +31,25 @@ stages {
         steps {
             bat '''
             echo Running Trivy Security Scan...
-            trivy fs --scanners vuln --timeout 10m --severity HIGH,CRITICAL --format table --output trivy-report.txt .
+            trivy fs --scanners vuln --timeout 10m --skip-dirs frontend/ecommerce-ui/node_modules --severity HIGH,CRITICAL --format table --output trivy-report.txt .
             '''
         }
     }
 
     stage('SonarQube Analysis') {
         steps {
-            withSonarQubeEnv('SonarQube') {
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+            dir('frontend\\ecommerce-ui') {
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
 
-                    bat """
-                    sonar-scanner ^
-                    -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
-                    -Dsonar.sources=. ^
-                    -Dsonar.host.url=%SONAR_HOST_URL% ^
-                    -Dsonar.login=%SONAR_TOKEN%
-                    """
+                        bat """
+                        sonar-scanner ^
+                        -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
+                        -Dsonar.sources=. ^
+                        -Dsonar.host.url=%SONAR_HOST_URL% ^
+                        -Dsonar.login=%SONAR_TOKEN%
+                        """
+                    }
                 }
             }
         }
@@ -51,7 +57,9 @@ stages {
 
     stage('Unit Testing') {
         steps {
-            bat 'npm run test -- --watch=false --browsers=ChromeHeadless'
+            dir('frontend\\ecommerce-ui') {
+                bat 'npm run test -- --watch=false --browsers=ChromeHeadless'
+            }
         }
     }
 
@@ -65,7 +73,9 @@ stages {
 
     stage('Build') {
         steps {
-            bat 'npm run build -- --configuration production'
+            dir('frontend\\ecommerce-ui') {
+                bat 'npm run build -- --configuration production'
+            }
         }
     }
 
@@ -77,7 +87,7 @@ stages {
             }
 
             bat '''
-            powershell Compress-Archive -Path dist\\* -DestinationPath %ZIP_NAME%
+            powershell Compress-Archive -Path frontend\\ecommerce-ui\\dist\\* -DestinationPath %ZIP_NAME%
             '''
         }
     }
@@ -98,6 +108,12 @@ stages {
 post {
     always {
         archiveArtifacts artifacts: 'trivy-report.txt', allowEmptyArchive: true
+    }
+    success {
+        echo "✅ Frontend CI Pipeline SUCCESS"
+    }
+    failure {
+        echo "❌ Frontend CI Pipeline FAILED"
     }
 }
 
