@@ -7,12 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection"))
-    ));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("CatalogConnection")
+    )
+);
 
-// 🔥 ADD THIS (CORS)
+// 🔥 CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -33,7 +33,6 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// 🔥 ADD THIS (VERY IMPORTANT)
 app.UseCors("AllowAll");
 
 app.UseAuthorization();
