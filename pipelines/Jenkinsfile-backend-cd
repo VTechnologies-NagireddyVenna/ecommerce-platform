@@ -1,62 +1,89 @@
 pipeline {
 
-agent { label 'deploy-agent-deploy' }
+    agent { label 'deploy-agent-deploy' }
 
-options { 
-    skipDefaultCheckout(true) 
-}
-environment {
-    JFROG_URL = "http://192.168.56.1:8082/artifactory/ecommerce-backend"
-    DEPLOY_PATH = "C:\\inetpub\\ecommerce-api"
-}
-
-stages {
-
-    stage('Clean Old Deployment') {
-        steps {
-            bat '''
-            if exist %DEPLOY_PATH% (
-                rmdir /s /q %DEPLOY_PATH%
-            )
-            mkdir %DEPLOY_PATH%
-            '''
-        }
+    options { 
+        skipDefaultCheckout(true) 
     }
 
-    stage('Download Artifact from JFrog') {
-        steps {
-            withCredentials([usernamePassword(credentialsId: 'artifactory-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+    environment {
+        JFROG_URL = "http://192.168.56.1:8082/artifactory/ecommerce-backend"
+        DEPLOY_PATH = "C:\\inetpub\\ecommerce-api"
+        TEMP_PATH = "C:\\temp\\backend-deploy"
+    }
 
+    stages {
+
+        stage('Prepare Temp Directory') {
+            steps {
                 bat '''
-                curl.exe -u %USER%:%PASS% -O %JFROG_URL%/latest.zip
+                if exist %TEMP_PATH% (
+                    rmdir /s /q %TEMP_PATH%
+                )
+                mkdir %TEMP_PATH%
                 '''
+            }
+        }
+
+        stage('Create Exclude File') {
+            steps {
+                writeFile file: 'exclude.txt', text: '''
+web.config
+appsettings.json
+logs
+'''
+            }
+        }
+
+        stage('Download Artifact from JFrog') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'artifactory-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    bat '''
+                    curl.exe -u %USER%:%PASS% -o %TEMP_PATH%\\backend.zip %JFROG_URL%/latest.zip
+                    '''
+                }
+            }
+        }
+
+        stage('Extract Artifact') {
+            steps {
+                bat '''
+                powershell Expand-Archive -Path %TEMP_PATH%\\backend.zip -DestinationPath %TEMP_PATH% -Force
+                '''
+            }
+        }
+
+        stage('Deploy (Preserve Configs & Logs)') {
+            steps {
+                bat '''
+                REM 🔥 Copy all files except configs
+
+                xcopy %TEMP_PATH%\\* "%DEPLOY_PATH%\\" /E /H /C /I /Y /EXCLUDE:exclude.txt
+                '''
+            }
+        }
+
+        stage('Cleanup Temp') {
+            steps {
+                bat '''
+                rmdir /s /q %TEMP_PATH%
+                '''
+            }
+        }
+
+        stage('Restart IIS') {
+            steps {
+                bat 'iisreset'
             }
         }
     }
 
-    stage('Extract Artifact') {
-        steps {
-            bat '''
-            powershell Expand-Archive -Path latest.zip -DestinationPath %DEPLOY_PATH%
-            '''
+    post {
+        success {
+            echo "✅ Backend Deployment SUCCESS (Safe Deploy - Configs Preserved)"
+        }
+        failure {
+            echo "❌ Backend Deployment FAILED"
         }
     }
-
-    stage('Restart IIS') {
-        steps {
-            bat 'iisreset'
-        }
-    }
-
-}
-
-post {
-    success {
-        echo "✅ Backend Deployment SUCCESS"
-    }
-    failure {
-        echo "❌ Backend Deployment FAILED"
-    }
-}
-
 }
