@@ -25,6 +25,14 @@ pipeline {
             }
         }
 
+        stage('Create Exclude File') {   // 🔥 MOVED UP
+            steps {
+                writeFile file: 'exclude.txt', text: '''
+web.config
+'''
+            }
+        }
+
         stage('Download Artifact from JFrog') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'artifactory-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
@@ -54,14 +62,6 @@ pipeline {
                     )
                 )
                 '''
-            }
-        }
-
-        stage('Create Exclude File') {
-            steps {
-                writeFile file: 'exclude.txt', text: '''
-web.config
-'''
             }
         }
 
